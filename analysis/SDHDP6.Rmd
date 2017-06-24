@@ -1,0 +1,123 @@
+---
+title: "SDHDP6.Rmd"
+output: pdf_document
+---
+One of the possible biological explanations for the interaction effect is the linkage disequilibrium. Europeans are known to have stronger LD between markers than Africans, and such difference can lead to an interaction effect between a tag SNP and expression level. Consider an eQTL $s_1$ that affects the expression $y$ regardless of the population. Let $s_2$ be in LD with $s_1$ for Europeans, but not for Africans. Then, the variant $s_2$ will affect $y$ on European chromosome through $s_1$ but not on African chromosome. In other words, $s_2$ will have different effects on $y$ on each population, which is interpreted as an interaction between ancestry $s_2$ on $y$.
+
+An example from the real data is illustrated below for gene SDHDP6. The black points are from $s_1$ rs654818. Among the SNPs that showed no significant interaction effect, rs654818 had the strongest genotype effect. For all local ancestries, it shows a decreasing effect of the minor allele. The red points are from $s_2$ rs679429 that showed the strongest interaction effect of local ancestry and genotype. When $L=0$ (European gene), the genotypes from the two SNPs are almost the same, showing high LD, and therefore they both show decreasing effect of minor allele. When $L=1$, they show less LD, and when $L=2$ (African gene), the two genotypes show a completely different pattern. Therefore, we can suspect that the strong LD among Europeans lets the strongest eQTL to pass on its effects onto another variant, leading to an interaction effect. 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(data.table)
+setwd('/Volumes/im-lab/nas40t2/tae/differentialeQTLs/bytissues/Muscle_Skeletal/temp/tests/e~A+L+G+LG/ancestry-eGenes/try2_pcaexp/result_analysis')
+x = read.table('result.txt', header = TRUE, stringsAsFactors=FALSE)
+pmax = max(x$LG.p)
+
+y = x[sort(x$LG.p,index.return=TRUE)$ix,]
+
+A = read.table('../../../../data/globalfromlamp', header = FALSE); A = A$V1;
+A = c(A, rep(0, 301)) #vector
+phe = read.table('../../../../data/phenotypes_356indiv', header = TRUE, stringsAsFactors = FALSE)
+age = phe$AGE; gen = phe$GENDER
+indicator=c(rep(0, 55), rep(1, 301))
+pc = read.table('../../../../data/pca_exp/pc_vectors')
+pc1 = pc[,1]; pc2 = pc[,2]
+
+
+result_after_LD = matrix(0, 201, 15)
+colnames(result_after_LD) = c('chr','gene_start','gene_end','gene_id','G1.est',
+                              'G2.est','LG.est','G1.t','G2.t','LG.t',
+                              'G1.p','G2.p','LG.p','G1.pos','G2.pos')
+result_after_LD2 = matrix(0, 201, 15)
+colnames(result_after_LD2) = c('chr','gene_start','gene_end','gene_id','G1.est',
+                              'G2.est','LG.est','G1.t','G2.t','LG.t',
+                              'G1.p','G2.p','LG.p','G1.pos','G2.pos')
+
+chr=1; i=6
+nn = sum(x$chr==chr);
+temp = x[x$chr==chr,]
+print(paste(chr,'with',nn,'snps'))
+tempexp = setDF(fread(paste0('../../../../data/bychr/chr',chr,'/exp')))
+bigL = setDF(fread(paste0('../../../../data/bychr/chr',chr,'/L'))) #matrix
+exp_ind = which(tempexp[,4]==temp[i,2])
+L = as.numeric(bigL[exp_ind, ])
+exp_info = tempexp[exp_ind, 1:4]
+exp = as.numeric(tempexp[exp_ind, -(1:4)])
+pos = read.table(paste0('../../../../data/bychr/chr',chr,'/pos_nodup'), header = TRUE)
+cut = which(pos$x>exp_info[,2]-1000000 & pos$x < exp_info[,3]+1000000)
+pos = pos[cut, ]
+m = length(pos)
+bigg = t(setDF(fread(paste0('../../../../data/bychr/chr',chr,'/geno_nodup'), skip = cut[1], nrow = length(cut))))
+bigg = bigg[-1, ]
+ind1=2528; ind2 = 2523;
+mod = lm(exp~A+L+indicator+age+gen+pc1+pc2+bigg[,ind1]+bigg[,ind2]+bigg[,ind2]:L)
+c = coef(summary(mod))
+in0=which(L==0)
+in1=which(L==1)
+in2=which(L==2)
+par(mfrow=c(1,3))
+
+
+#getplot = function(inn, l, mod){
+inn=in0; l=0;
+######plotting code#######
+
+g1=bigg[inn,ind1]-0.05
+g2=bigg[inn,ind2]+0.05
+plot(g1, exp[inn], xlim=c(-0.1, 2.1), ylab='', xlab='', ylim=c(-3, 3))
+title(main=paste0('L=',l), xlab="genotype", ylab="expression",cex.lab=1.5,cex.main=1.4)
+axis(side=1,at=c(0,1,2),lwd=1,lwd.ticks=1)
+points(g2,exp[inn], col = 'red', pch='*')
+if(l==1){legend('bottom',legend=c('rs654818      ','rs679429      '), horiz=TRUE, lwd=5,col=c('black','red'), bty=1, cex=1.3)}
+abline(c[1,1]+c[4,1], c[9,1], lty=2)
+abline(c[1,1]+c[4,1], c[10,1], col = 'red', lty=2)
+####################
+title("SDHDP6", outer=TRUE, cex.main = 2)
+
+inn=in1; l=1;
+g1=bigg[inn,ind1]-0.05
+g2=bigg[inn,ind2]+0.05
+plot(g1, exp[inn], xlim=c(-0.1, 2.1), ylab='', xlab='', ylim=c(-3, 3))
+title(main=paste0('L=',l), 
+           xlab="genotype", 
+           cex.lab=1.5, cex.main=1.4)
+axis(side=1,at=c(0,1,2),lwd=1,lwd.ticks=1)
+points(g2,exp[inn], col = 'red', pch='*')
+if(l==1){legend('bottom',legend=c('rs654818      ','rs679429      '), horiz=TRUE, lwd=5,col=c('black','red'), bty=1, cex=1.3)}
+abline(c[1,1]+c[4,1]+c[3,1], c[9,1], lty=2)
+abline(c[1,1]+c[4,1]+c[3,1], c[10,1]+c[11,1], col = 'red', lty=2)
+
+
+inn=in2; l=2;
+c = coef(summary(mod))
+g1=bigg[inn,ind1]-0.05
+g2=bigg[inn,ind2]+0.05
+plot(g1, exp[inn], xlim=c(-0.1, 2.1), ylab='', xlab='', ylim=c(-3, 3))
+title(main=paste0('L=',l), xlab="genotype", cex.lab=1.5, cex.main=1.4)
+axis(side=1,at=c(0,1,2),lwd=1,lwd.ticks=1)
+points(g2,exp[inn], col = 'red', pch='*')
+if(l==1){legend('bottom',legend=c('rs654818      ','rs679429      '), horiz=TRUE, lwd=5,col=c('black','red'), bty=1, cex=1.3)}
+abline(c[1,1]+c[4,1]+2*c[3,1], c[9,1], lty=2)
+abline(c[1,1]+c[4,1]+2*c[3,1], c[10,1]+c[11,1]*2, col = 'red', lty=2)
+
+
+out = data.frame(G.est=rep(0,m), LG.est=rep(0,m), G.t = rep(0,m), LG.t = rep(0,m), G.p = rep(0, m), LG.p = rep(0,m), L.p = rep(0, m))
+    for (j in 1:m){
+      mod = lm(exp~A+L+indicator+age+gen+pc1+pc2+bigg[,j]+L:bigg[,j])
+      c = coef(summary(mod))
+      if(dim(c)[1]==10){out[j,] = c(c[9:10,1], c[9:10, 3], c[9:10, 4], c[3, 4])}
+      else{c = matrix(NA, 10, 4); out[j,] = c(c[9:10,1], c[9:10,3], c[9:10,4], c[3,4])}
+    }
+
+
+par(mfrow = c(1,1), oma=c(0,0.5,0,0))
+plot(pos, -log10(out$G.p), type = 'l',
+     ylab = expression(-log[10](p)),
+     xlab = 'chromosomal position')
+lines(pos, -log10(out$LG.p), col = 'red')
+legend('topleft',col=c('black','red'),
+      legend=c('genotype effect            ','interaction effect              '),
+      lwd=5, y.intersp=1.2)
+abline(v=25620655, col='green')
+
+```
+
